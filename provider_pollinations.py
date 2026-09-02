@@ -44,17 +44,14 @@ async def generate_video_sync(
 ) -> dict:
     """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations.
 
-    الموديلات المجانية (بدون paid_only) عندها قيود مختلفة على المدة:
-    - wan-fast: 5 ثواني بالضبط، مافي غيرها
-    - nova-reel: من 6 لـ120 ثانية، بمضاعفات 6
-    نختار تلقائيًا الأنسب حسب المدة المطلوبة من المستخدم.
+    ⚠️ الرصيد المجاني (Pollen) اللي تحصل عليه تلقائيًا بحساب Pollinations
+    صغير جدًا (يكفي بضع مرات فقط). moديل wan-fast هو الأرخص (~0.01 Pollen
+    بالثانية = 0.05 لفيديو 5 ثواني)، فنستخدمه دائمًا كافتراضي حتى ما يخلص
+    رصيدك بسرعة. لفيديوهات أطول، لازم تشحن رصيد إضافي من
+    https://enter.pollinations.ai
     """
-    if duration <= 5:
-        pollinations_model = "wan-fast"
-        duration = 5
-    else:
-        pollinations_model = "nova-reel"
-        duration = max(6, min(120, round(duration / 6) * 6)) or 6
+    pollinations_model = "wan-fast"
+    duration = 5  # المدة الوحيدة المدعومة لهذا الموديل
 
     params = {"model": pollinations_model, "duration": duration, "aspectRatio": aspect_ratio}
     if POLLINATIONS_API_KEY:
