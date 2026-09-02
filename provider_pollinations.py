@@ -42,13 +42,18 @@ async def generate_image(prompt: str) -> dict:
 async def generate_video_sync(
     prompt: str, duration: int = 8, aspect_ratio: str = "16:9", model: str = "wan"
 ) -> dict:
-    """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations."""
-    pollinations_model = VIDEO_MODEL_MAP.get(model, "wan-fast")
+    """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations.
 
-    # كل موديل له مدة مسموحة مختلفة — نضبطها هون لتفادي رفض الطلب
-    if pollinations_model == "wan-fast":
-        duration = 5  # مدة ثابتة فقط
-    elif pollinations_model == "nova-reel":
+    الموديلات المجانية (بدون paid_only) عندها قيود مختلفة على المدة:
+    - wan-fast: 5 ثواني بالضبط، مافي غيرها
+    - nova-reel: من 6 لـ120 ثانية، بمضاعفات 6
+    نختار تلقائيًا الأنسب حسب المدة المطلوبة من المستخدم.
+    """
+    if duration <= 5:
+        pollinations_model = "wan-fast"
+        duration = 5
+    else:
+        pollinations_model = "nova-reel"
         duration = max(6, min(120, round(duration / 6) * 6)) or 6
 
     params = {"model": pollinations_model, "duration": duration, "aspectRatio": aspect_ratio}
