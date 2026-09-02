@@ -20,7 +20,8 @@ FAL_KEY = os.environ.get("FAL_KEY", "")
 FAL_BASE = "https://queue.fal.run"
 
 FAL_MODEL_MAP = {
-    "sora-2": "fal-ai/sora-2/text-to-video",
+    "sora-2": "fal-ai/wan/v2.2-a14b/text-to-video",  # Sora 2 الحقيقي يحتاج موافقة خاصة من OpenAI،
+    # نستخدم Wan 2.2 (fal.ai) كبديل مفتوح لكل الحسابات بجودة احترافية حقيقية
 }
 
 
