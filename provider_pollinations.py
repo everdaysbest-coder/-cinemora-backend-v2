@@ -19,11 +19,13 @@ POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
 
 # خرائط أسماء الموديلات اللي يستخدمها الفرونت اند (wan, seedance-2.0, veo, nova-reel)
 # لأسماء موديلات Pollinations الفعلية
+# خرائط أسماء الموديلات اللي يستخدمها الفرونت اند (wan, seedance-2.0, veo, nova-reel)
+# لأسماء موديلات Pollinations الفعلية المتاحة بدون "paid_only" (حسب /video/models)
 VIDEO_MODEL_MAP = {
-    "wan": "wan",
-    "seedance-2.0": "seedance-pro",
-    "veo": "veo",
-    "nova-reel": "nova-reel",
+    "wan": "wan-fast",       # Wan 2.2 — الوحيد الحر من عائلة wan (5 ثواني، بدون صوت)
+    "seedance-2.0": "wan-fast",
+    "veo": "wan-fast",
+    "nova-reel": "nova-reel",  # حر أيضًا، فيديو أطول (6-120 ثانية)
 }
 
 
@@ -41,7 +43,14 @@ async def generate_video_sync(
     prompt: str, duration: int = 8, aspect_ratio: str = "16:9", model: str = "wan"
 ) -> dict:
     """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations."""
-    pollinations_model = VIDEO_MODEL_MAP.get(model, "wan")
+    pollinations_model = VIDEO_MODEL_MAP.get(model, "wan-fast")
+
+    # كل موديل له مدة مسموحة مختلفة — نضبطها هون لتفادي رفض الطلب
+    if pollinations_model == "wan-fast":
+        duration = 5  # مدة ثابتة فقط
+    elif pollinations_model == "nova-reel":
+        duration = max(6, min(120, round(duration / 6) * 6)) or 6
+
     params = {"model": pollinations_model, "duration": duration, "aspectRatio": aspect_ratio}
     if POLLINATIONS_API_KEY:
         params["key"] = POLLINATIONS_API_KEY
