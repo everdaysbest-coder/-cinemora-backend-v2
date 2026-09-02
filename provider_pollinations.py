@@ -53,6 +53,15 @@ async def generate_video_sync(
         r = await client.get(url)
         r.raise_for_status()
         video_bytes = r.content
+        content_type = r.headers.get("content-type", "")
+
+    if "video" not in content_type or len(video_bytes) < 10_000:
+        # السيرفر رجّع شي مو فيديو فعلي (رسالة خطأ نصية، أو صورة احتياطية...)
+        preview = video_bytes[:300].decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Pollinations لم يرجّع فيديو صالح (content-type: {content_type or 'غير معروف'}, "
+            f"الحجم: {len(video_bytes)} بايت). محتوى الاستجابة: {preview}"
+        )
 
     b64 = base64.b64encode(video_bytes).decode("utf-8")
     return {"video_base64": f"data:video/mp4;base64,{b64}"}
