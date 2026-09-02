@@ -68,11 +68,12 @@ async def generate_video(request: Request):
             job_doc["_fal_status_url"] = fal_result.get("_status_url")
             job_doc["_fal_response_url"] = fal_result.get("_response_url")
         else:
-            # المسار المجاني: Hugging Face Inference API (استدعاء متزامن،
-            # يرجّع الفيديو مباشرة بدون job/polling حقيقي).
-            hf_result = await hf_provider.generate_video_sync(prompt)
+            # المسار المجاني: Pollinations (استدعاء متزامن، يرجّع الفيديو مباشرة)
+            pollinations_result = await pollinations_provider.generate_video_sync(
+                prompt, duration, aspect_ratio, model
+            )
             job_doc["status"] = "completed"
-            job_doc["video_url"] = hf_result["video_base64"]
+            job_doc["video_url"] = pollinations_result["video_base64"]
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"فشل إرسال مهمة الفيديو: {e}")
 
