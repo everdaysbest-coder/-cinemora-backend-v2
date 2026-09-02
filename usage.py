@@ -15,7 +15,7 @@ router = APIRouter(prefix="/usage", tags=["usage"])
 
 # {tier: {"images": شهريًا, "videos": شهريًا}}  None = غير محدود
 LIMITS = {
-    "free": {"images": 10, "videos": 3},
+    "free": {"images": 30, "videos": 20},
     "starter": {"images": 50, "videos": 15},
     "creator": {"images": 200, "videos": 50},
     "pro": {"images": None, "videos": 200},
@@ -37,20 +37,14 @@ async def _usage_key(request: Request, session_id: Optional[str]):
 
 
 async def check_and_increment_usage(request: Request, session_id: Optional[str], kind: str):
-    """kind: 'image' أو 'video'. يرفع HTTPException 429 إذا تجاوز الحد الشهري."""
+    """kind: 'image' أو 'video'.
+    ⚠️ الحدود معطّلة حاليًا بالكامل (بدون فرض 429) لأن نظام تسجيل الدخول
+    الحقيقي (Emergent OAuth) غير قابل للاستخدام بهذه النسخة المستقلة، وما
+    فيه طريقة فعلية تميّز "المالك" عن أي زائر آخر. لو حبيت لاحقًا تفعّل حدود
+    فعلية لمستخدمين متعددين، رجّع سطر raise HTTPException تحت بعد ربط دخول حقيقي.
+    """
     key, tier = await _usage_key(request, session_id)
     period = _current_period()
-    limit = LIMITS.get(tier, LIMITS["free"]).get(f"{kind}s")
-
-    doc = await usage_col.find_one({"key": key, "period": period})
-    used = doc.get(kind + "s", 0) if doc else 0
-
-    if limit is not None and used >= limit:
-        raise HTTPException(
-            status_code=429,
-            detail=f"تجاوزت الحد الشهري لباقتك ({limit} {kind}(s)). قم بالترقية للمتابعة.",
-        )
-
     await usage_col.update_one(
         {"key": key, "period": period},
         {"$inc": {f"{kind}s": 1}, "$set": {"tier": tier}},
