@@ -14,6 +14,8 @@ import urllib.parse
 import httpx
 
 IMAGE_BASE = os.environ.get("POLLINATIONS_IMAGE_BASE", "https://image.pollinations.ai/prompt")
+VIDEO_BASE = os.environ.get("POLLINATIONS_VIDEO_BASE", "https://gen.pollinations.ai/video")
+POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
 
 # خرائط أسماء الموديلات اللي يستخدمها الفرونت اند (wan, seedance-2.0, veo, nova-reel)
 # لأسماء موديلات Pollinations الفعلية
@@ -38,29 +40,24 @@ async def generate_image(prompt: str) -> dict:
 async def generate_video_sync(
     prompt: str, duration: int = 8, aspect_ratio: str = "16:9", model: str = "wan"
 ) -> dict:
-    """يستدعي Pollinations بشكل متزامن ويرجع الفيديو مباشرة (بدون job/polling)."""
+    """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations."""
     pollinations_model = VIDEO_MODEL_MAP.get(model, "wan")
-    width, height = (1280, 720) if aspect_ratio != "9:16" else (720, 1280)
-    params = {
-        "model": pollinations_model,
-        "width": width,
-        "height": height,
-        "nologo": "true",
-    }
-    url = f"{IMAGE_BASE}/{urllib.parse.quote(prompt)}?{urllib.parse.urlencode(params)}"
+    params = {"model": pollinations_model, "duration": duration, "aspectRatio": aspect_ratio}
+    if POLLINATIONS_API_KEY:
+        params["key"] = POLLINATIONS_API_KEY
+    url = f"{VIDEO_BASE}/{urllib.parse.quote(prompt)}?{urllib.parse.urlencode(params)}"
 
     async with httpx.AsyncClient(timeout=180) as client:
         r = await client.get(url)
-        r.raise_for_status()
-        video_bytes = r.content
         content_type = r.headers.get("content-type", "")
+        video_bytes = r.content
 
-    if "video" not in content_type or len(video_bytes) < 10_000:
-        # السيرفر رجّع شي مو فيديو فعلي (رسالة خطأ نصية، أو صورة احتياطية...)
-        preview = video_bytes[:300].decode("utf-8", errors="replace")
+    if r.status_code != 200 or "video" not in content_type or len(video_bytes) < 10_000:
+        preview = video_bytes[:400].decode("utf-8", errors="replace")
         raise RuntimeError(
-            f"Pollinations لم يرجّع فيديو صالح (content-type: {content_type or 'غير معروف'}, "
-            f"الحجم: {len(video_bytes)} بايت). محتوى الاستجابة: {preview}"
+            f"Pollinations Video API خطأ (status: {r.status_code}, "
+            f"content-type: {content_type or 'غير معروف'}, الحجم: {len(video_bytes)} بايت). "
+            f"التفاصيل: {preview}"
         )
 
     b64 = base64.b64encode(video_bytes).decode("utf-8")
