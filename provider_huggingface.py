@@ -18,7 +18,7 @@ import httpx
 
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 HF_VIDEO_MODEL = os.environ.get("HF_VIDEO_MODEL", "damo-vilab/text-to-video-ms-1.7b")
-HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_VIDEO_MODEL}"
+HF_API_URL = f"https://router.huggingface.co/hf-inference/models/{HF_VIDEO_MODEL}"
 
 
 async def generate_video_sync(prompt: str, max_retries: int = 3) -> dict:
