@@ -103,9 +103,13 @@ async def get_video_job(job_id: str):
 
             new_status = updated.get("status", job["status"])
             video_url = updated.get("video_url")
+            if new_status == "failed":
+                print(f"[video_job {job_id}] FAILED: {updated.get('error')}")
             update_fields = {"status": new_status}
             if video_url:
                 update_fields["video_url"] = video_url
+            if updated.get("error"):
+                update_fields["error"] = updated.get("error")
             await video_jobs_col.update_one({"job_id": job_id}, {"$set": update_fields})
             job.update(update_fields)
         except Exception:
@@ -116,4 +120,5 @@ async def get_video_job(job_id: str):
         "status": job["status"],
         "video_url": job.get("video_url"),
         "prompt": job.get("prompt"),
+        "error": job.get("error"),
     }
