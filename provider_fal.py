@@ -20,7 +20,10 @@ FAL_KEY = os.environ.get("FAL_KEY", "")
 FAL_BASE = "https://queue.fal.run"
 
 FAL_MODEL_MAP = {
-    "sora-2": "fal-ai/longcat-video/text-to-video/720p",  # يدعم مدد طويلة فعليًا (بعكس معظم الموديلات المحدودة بـ5-10 ثواني)
+    # للمدد حتى 15 ثانية: Seedance 2.0 (التزام دقيق بالبرومبت وجودة سينمائية)
+    "sora-2_short": "bytedance/seedance-2.0/text-to-video",
+    # للمدد الأطول من 15 ثانية: LongCat (يدعم دقائق، لكن التزام أضعف بالبرومبت)
+    "sora-2_long": "fal-ai/longcat-video/text-to-video/720p",
 }
 
 
@@ -32,14 +35,27 @@ async def submit_video_job(prompt: str, duration: int, aspect_ratio: str, model:
     if not FAL_KEY:
         raise RuntimeError("FAL_KEY غير مضبوط في .env")
     fal_model = FAL_MODEL_MAP.get(model, model)
-    # LongCat يحسب المدة بعدد الفريمات (30 فريم/ثانية). نحدد سقف 60 ثانية تفاديًا لتكلفة عالية
     duration = max(1, min(60, duration))
-    num_frames = duration * 30
+
+    if duration <= 15:
+        # Seedance 2.0 — جودة أعلى والتزام أدق بالبرومبت، لكن حتى 15 ثانية بس
+        fal_model = FAL_MODEL_MAP["sora-2_short"]
+        payload = {
+            "prompt": prompt,
+            "duration": str(max(4, duration)),
+            "resolution": "720p",
+            "aspect_ratio": aspect_ratio,
+        }
+    else:
+        # LongCat — يدعم مدد أطول، لكن التزام أضعف بالبرومبت
+        fal_model = FAL_MODEL_MAP["sora-2_long"]
+        payload = {"prompt": prompt, "num_frames": duration * 30}
+
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
             f"{FAL_BASE}/{fal_model}",
             headers=_headers(),
-            json={"prompt": prompt, "num_frames": num_frames},
+            json=payload,
         )
         if r.status_code >= 400:
             raise RuntimeError(f"fal.ai [{r.status_code}] {r.text[:500]}")
