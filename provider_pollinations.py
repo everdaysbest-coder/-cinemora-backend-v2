@@ -64,6 +64,7 @@ async def generate_image(prompt: str) -> dict:
         "model": "flux",
         "width": 1024,
         "height": 1024,
+        "enhance": "true",
         "seed": random.randint(1, 2_000_000_000),
     }
     url = f"{IMAGE_BASE}/{urllib.parse.quote(prompt)}?{urllib.parse.urlencode(params)}"
