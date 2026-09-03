@@ -20,7 +20,7 @@ FAL_KEY = os.environ.get("FAL_KEY", "")
 FAL_BASE = "https://queue.fal.run"
 
 FAL_MODEL_MAP = {
-    "sora-2": "fal-ai/minimax/video-01",  # موديل مفتوح لكل الحسابات بدون قيود وصول خاصة
+    "sora-2": "fal-ai/longcat-video/text-to-video/720p",  # يدعم مدد طويلة فعليًا (بعكس معظم الموديلات المحدودة بـ5-10 ثواني)
 }
 
 
@@ -32,11 +32,14 @@ async def submit_video_job(prompt: str, duration: int, aspect_ratio: str, model:
     if not FAL_KEY:
         raise RuntimeError("FAL_KEY غير مضبوط في .env")
     fal_model = FAL_MODEL_MAP.get(model, model)
+    # LongCat يحسب المدة بعدد الفريمات (30 فريم/ثانية). نحدد سقف 60 ثانية تفاديًا لتكلفة عالية
+    duration = max(1, min(60, duration))
+    num_frames = duration * 30
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
             f"{FAL_BASE}/{fal_model}",
             headers=_headers(),
-            json={"prompt": prompt},
+            json={"prompt": prompt, "num_frames": num_frames},
         )
         if r.status_code >= 400:
             raise RuntimeError(f"fal.ai [{r.status_code}] {r.text[:500]}")
