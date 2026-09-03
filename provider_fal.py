@@ -20,8 +20,7 @@ FAL_KEY = os.environ.get("FAL_KEY", "")
 FAL_BASE = "https://queue.fal.run"
 
 FAL_MODEL_MAP = {
-    "sora-2": "fal-ai/wan/v2.2-a14b/text-to-video",  # Sora 2 الحقيقي يحتاج موافقة خاصة من OpenAI،
-    # نستخدم Wan 2.2 (fal.ai) كبديل مفتوح لكل الحسابات بجودة احترافية حقيقية
+    "sora-2": "fal-ai/minimax/video-01",  # موديل مفتوح لكل الحسابات بدون قيود وصول خاصة
 }
 
 
@@ -37,13 +36,10 @@ async def submit_video_job(prompt: str, duration: int, aspect_ratio: str, model:
         r = await client.post(
             f"{FAL_BASE}/{fal_model}",
             headers=_headers(),
-            json={
-                "prompt": prompt,
-                "duration": duration,
-                "aspect_ratio": aspect_ratio,
-            },
+            json={"prompt": prompt},
         )
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError(f"fal.ai [{r.status_code}] {r.text[:500]}")
         data = r.json()
 
     return {
