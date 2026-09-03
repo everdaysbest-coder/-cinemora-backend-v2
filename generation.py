@@ -6,12 +6,25 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Request
 
 from db import video_jobs_col
+from deps import get_current_user, is_owner_bypass
 import provider_fal as fal_provider
 import provider_huggingface as hf_provider
 import provider_pollinations as pollinations_provider
 from usage import check_and_increment_usage
 
 router = APIRouter(tags=["generation"])
+
+PAID_TIERS = {"starter", "creator", "pro", "admin"}
+
+
+async def _is_paid_tier(request: Request) -> bool:
+    """يحدد إذا كان بإمكان هذا المستخدم استخدام fal.ai المدفوع.
+    الزوار وأصحاب الباقة المجانية دائمًا يُوجَّهون لـ Pollinations المجاني
+    فقط، حتى لو تلاعبوا بعدد الطلبات — حماية مباشرة لرصيدك."""
+    if is_owner_bypass(request):
+        return True
+    user = await get_current_user(request)
+    return bool(user) and user.get("tier", "free") in PAID_TIERS
 
 
 @router.post("/generate/image")
@@ -23,19 +36,24 @@ async def generate_image(request: Request):
         raise HTTPException(status_code=400, detail="prompt مطلوب")
 
     await check_and_increment_usage(request, session_id, kind="image")
+    can_use_fal = await _is_paid_tier(request)
 
-    try:
-        result = await fal_provider.generate_image(prompt)
-    except Exception as fal_error:
+    if can_use_fal:
         try:
-            result = await pollinations_provider.generate_image(prompt)
+            return await fal_provider.generate_image(prompt)
+        except Exception as fal_error:
+            try:
+                return await pollinations_provider.generate_image(prompt)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"فشل توليد الصورة (fal.ai: {fal_error} | Pollinations: {e})",
+                )
+    else:
+        try:
+            return await pollinations_provider.generate_image(prompt)
         except Exception as e:
-            raise HTTPException(
-                status_code=502,
-                detail=f"فشل توليد الصورة (fal.ai: {fal_error} | Pollinations: {e})",
-            )
-
-    return result
+            raise HTTPException(status_code=502, detail=f"فشل توليد الصورة: {e}")
 
 
 @router.post("/generate/video")
@@ -52,6 +70,10 @@ async def generate_video(request: Request):
         raise HTTPException(status_code=400, detail="prompt مطلوب")
 
     await check_and_increment_usage(request, body.get("session_id"), kind="video")
+
+    can_use_fal = await _is_paid_tier(request)
+    if provider == "fal" and not can_use_fal:
+        provider = "pollinations"  # زائر/باقة مجانية — يُحوَّل للمجاني تلقائيًا، بدون خطأ مزعج
 
     job_id = str(uuid.uuid4())
     job_doc = {
@@ -74,6 +96,7 @@ async def generate_video(request: Request):
             job_doc["_fal_status_url"] = fal_result.get("_status_url")
             job_doc["_fal_response_url"] = fal_result.get("_response_url")
         else:
+            # المسار المجاني: Pollinations (استدعاء متزامن، يرجّع الفيديو مباشرة)
             pollinations_result = await pollinations_provider.generate_video_sync(
                 prompt, duration, aspect_ratio, model
             )
@@ -113,7 +136,7 @@ async def get_video_job(job_id: str):
             await video_jobs_col.update_one({"job_id": job_id}, {"$set": update_fields})
             job.update(update_fields)
         except Exception:
-            pass
+            pass  # نرجّع آخر حالة معروفة محليًا إن تعذّر الاستعلام من المزوّد
 
     return {
         "job_id": job["job_id"],
@@ -122,3 +145,4 @@ async def get_video_job(job_id: str):
         "prompt": job.get("prompt"),
         "error": job.get("error"),
     }
+    
