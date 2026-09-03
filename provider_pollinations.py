@@ -17,24 +17,35 @@ IMAGE_BASE = os.environ.get("POLLINATIONS_IMAGE_BASE", "https://image.pollinatio
 VIDEO_BASE = os.environ.get("POLLINATIONS_VIDEO_BASE", "https://gen.pollinations.ai/video")
 POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
 
-# خرائط أسماء الموديلات اللي يستخدمها الفرونت اند (wan, seedance-2.0, veo, nova-reel)
-# لأسماء موديلات Pollinations الفعلية
-# خرائط أسماء الموديلات اللي يستخدمها الفرونت اند (wan, seedance-2.0, veo, nova-reel)
-# لأسماء موديلات Pollinations الفعلية المتاحة بدون "paid_only" (حسب /video/models)
 VIDEO_MODEL_MAP = {
-    "wan": "wan-fast",       # Wan 2.2 — الوحيد الحر من عائلة wan (5 ثواني، بدون صوت)
+    "wan": "wan-fast",
     "seedance-2.0": "wan-fast",
     "veo": "wan-fast",
-    "nova-reel": "nova-reel",  # حر أيضًا، فيديو أطول (6-120 ثانية)
+    "nova-reel": "nova-reel",
 }
 
 
 async def generate_image(prompt: str) -> dict:
-    url = f"{IMAGE_BASE}/{urllib.parse.quote(prompt)}?nologo=true"
-    async with httpx.AsyncClient(timeout=120) as client:
+    import random
+
+    params = {"nologo": "true", "seed": random.randint(1, 2_000_000_000)}
+    if POLLINATIONS_API_KEY:
+        params["key"] = POLLINATIONS_API_KEY
+    url = f"{IMAGE_BASE}/{urllib.parse.quote(prompt)}?{urllib.parse.urlencode(params)}"
+
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
         r = await client.get(url)
-        r.raise_for_status()
+        content_type = r.headers.get("content-type", "")
         image_bytes = r.content
+
+    if r.status_code != 200 or "image" not in content_type or len(image_bytes) < 1_000:
+        preview = image_bytes[:400].decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Pollinations Image API خطأ (status: {r.status_code}, "
+            f"content-type: {content_type or 'غير معروف'}, الحجم: {len(image_bytes)} بايت). "
+            f"التفاصيل: {preview}"
+        )
+
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     return {"image_base64": f"data:image/jpeg;base64,{b64}"}
 
@@ -42,16 +53,9 @@ async def generate_image(prompt: str) -> dict:
 async def generate_video_sync(
     prompt: str, duration: int = 8, aspect_ratio: str = "16:9", model: str = "wan"
 ) -> dict:
-    """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations.
-
-    ⚠️ الرصيد المجاني (Pollen) اللي تحصل عليه تلقائيًا بحساب Pollinations
-    صغير جدًا (يكفي بضع مرات فقط). moديل wan-fast هو الأرخص (~0.01 Pollen
-    بالثانية = 0.05 لفيديو 5 ثواني)، فنستخدمه دائمًا كافتراضي حتى ما يخلص
-    رصيدك بسرعة. لفيديوهات أطول، لازم تشحن رصيد إضافي من
-    https://enter.pollinations.ai
-    """
+    """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations."""
     pollinations_model = "wan-fast"
-    duration = 5  # المدة الوحيدة المدعومة لهذا الموديل
+    duration = 5
 
     params = {"model": pollinations_model, "duration": duration, "aspectRatio": aspect_ratio}
     if POLLINATIONS_API_KEY:
@@ -73,4 +77,3 @@ async def generate_video_sync(
 
     b64 = base64.b64encode(video_bytes).decode("utf-8")
     return {"video_base64": f"data:video/mp4;base64,{b64}"}
-
