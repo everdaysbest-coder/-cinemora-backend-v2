@@ -68,8 +68,9 @@ async def generate_image(prompt: str) -> dict:
     }
     url = f"{IMAGE_BASE}/{urllib.parse.quote(prompt)}?{urllib.parse.urlencode(params)}"
 
+    headers = {"Authorization": f"Bearer {POLLINATIONS_API_KEY}"} if POLLINATIONS_API_KEY else {}
     async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-        r = await client.get(url)
+        r = await client.get(url, headers=headers)
         content_type = r.headers.get("content-type", "")
         image_bytes = r.content
 
