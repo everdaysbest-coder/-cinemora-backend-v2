@@ -28,9 +28,9 @@ VIDEO_MODEL_MAP = {
 async def generate_image(prompt: str) -> dict:
     import random
 
+    # ⚠️ الصور المجانية بـ Pollinations لا تحتاج مفتاح إطلاقًا — إرسال مفتاح
+    # الفيديو (sk_...) هنا كان يسبب رفض صامت وإرجاع صورة افتراضية بدل الفعلية
     params = {"nologo": "true", "seed": random.randint(1, 2_000_000_000)}
-    if POLLINATIONS_API_KEY:
-        params["key"] = POLLINATIONS_API_KEY
     url = f"{IMAGE_BASE}/{urllib.parse.quote(prompt)}?{urllib.parse.urlencode(params)}"
 
     async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
