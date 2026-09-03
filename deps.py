@@ -8,6 +8,14 @@ from fastapi import Request
 from db import sessions_col, users_col
 
 SESSION_COOKIE_NAME = os.environ.get("SESSION_COOKIE_NAME", "cinemora_session")
+OWNER_BYPASS_TOKEN = os.environ.get("OWNER_BYPASS_TOKEN", "")
+
+
+def is_owner_bypass(request: Request) -> bool:
+    """يسمح لك (المالك) بتجاوز كل الحدود والقيود عبر رابط فيه
+    ?owner_token=<القيمة نفسها بمتغير البيئة OWNER_BYPASS_TOKEN>.
+    لا يُفعَّل إطلاقًا إذا لم يُضبط المتغير (آمن افتراضيًا)."""
+    return bool(OWNER_BYPASS_TOKEN) and request.query_params.get("owner_token") == OWNER_BYPASS_TOKEN
 
 
 async def get_current_user(request: Request):
