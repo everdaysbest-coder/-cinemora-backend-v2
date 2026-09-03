@@ -19,6 +19,27 @@ import httpx
 FAL_KEY = os.environ.get("FAL_KEY", "")
 FAL_BASE = "https://queue.fal.run"
 
+
+async def generate_image(prompt: str) -> dict:
+    """صور عالية الجودة عبر fal.ai (مدفوعة، رخيصة جدًا ~$0.03/صورة).
+    يستخدم fal.run المتزامن (بدون queue/polling) لأن flux-2-pro سريع كفاية."""
+    if not FAL_KEY:
+        raise RuntimeError("FAL_KEY غير مضبوط في .env")
+    async with httpx.AsyncClient(timeout=60) as client:
+        r = await client.post(
+            "https://fal.run/fal-ai/flux-2-pro",
+            headers=_headers(),
+            json={"prompt": prompt},
+        )
+        if r.status_code >= 400:
+            raise RuntimeError(f"fal.ai [{r.status_code}] {r.text[:500]}")
+        data = r.json()
+
+    images = data.get("images") or []
+    if not images:
+        raise RuntimeError(f"fal.ai لم يرجع أي صورة: {data}")
+    return {"image_url": images[0].get("url")}
+
 FAL_MODEL_MAP = {
     # للمدد حتى 15 ثانية: Seedance 2.0 (التزام دقيق بالبرومبت وجودة سينمائية)
     "sora-2_short": "bytedance/seedance-2.0/text-to-video",
@@ -78,11 +99,17 @@ async def get_video_job(job_id: str, status_url: str, response_url: str) -> dict
         status_data = r.json()
         fal_status = status_data.get("status", "IN_QUEUE")
 
+        if fal_status in ("FAILED", "ERROR", "CANCELLED"):
+            error_detail = status_data.get("error") or status_data.get("logs") or fal_status
+            return {"job_id": job_id, "status": "failed", "error": str(error_detail)[:300]}
+
         if fal_status != "COMPLETED":
             return {"job_id": job_id, "status": _map_status(fal_status)}
 
         rr = await client.get(response_url, headers=_headers())
-        rr.raise_for_status()
+        if rr.status_code >= 400:
+            # المهمة "اكتملت" بنظر fal لكن جلب النتيجة فشل — نعتبرها فشل واضح بدل تعليق لا نهائي
+            return {"job_id": job_id, "status": "failed", "error": f"fal.ai response error {rr.status_code}: {rr.text[:300]}"}
         result = rr.json()
 
     video_url = None

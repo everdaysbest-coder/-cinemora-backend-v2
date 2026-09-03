@@ -25,9 +25,15 @@ async def generate_image(request: Request):
     await check_and_increment_usage(request, session_id, kind="image")
 
     try:
-        result = await pollinations_provider.generate_image(prompt)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"فشل توليد الصورة: {e}")
+        result = await fal_provider.generate_image(prompt)
+    except Exception as fal_error:
+        try:
+            result = await pollinations_provider.generate_image(prompt)
+        except Exception as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"فشل توليد الصورة (fal.ai: {fal_error} | Pollinations: {e})",
+            )
 
     return result
 
