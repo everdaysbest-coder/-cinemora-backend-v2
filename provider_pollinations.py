@@ -9,6 +9,7 @@
 
 import base64
 import os
+import re
 import urllib.parse
 
 import httpx
@@ -16,21 +17,55 @@ import httpx
 IMAGE_BASE = os.environ.get("POLLINATIONS_IMAGE_BASE", "https://image.pollinations.ai/prompt")
 VIDEO_BASE = os.environ.get("POLLINATIONS_VIDEO_BASE", "https://gen.pollinations.ai/video")
 POLLINATIONS_API_KEY = os.environ.get("POLLINATIONS_API_KEY", "")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
+
+async def _translate_to_english_if_needed(prompt: str) -> str:
+    """موديلات التوليد المجانية مدرّبة أساسًا بالإنجليزي — لو البرومبت فيه
+    حروف غير لاتينية (عربي مثلاً)، نترجمه أولًا عبر MyMemory (خدمة ترجمة
+    مجانية 100%، بدون مفتاح API). لو فشلت، نرجع البرومبت الأصلي كما هو."""
+    if not re.search(r"[^\x00-\x7F]", prompt):
+        return prompt
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                "https://api.mymemory.translated.net/get",
+                params={"q": prompt[:490], "langpair": "ar|en"},
+            )
+            r.raise_for_status()
+            data = r.json()
+        text = data.get("responseData", {}).get("translatedText", "").strip()
+        return text or prompt
+    except Exception:
+        return prompt
+
+# خرائط أسماء الموديلات اللي يستخدمها الفرونت اند (wan, seedance-2.0, veo, nova-reel)
+# لأسماء موديلات Pollinations الفعلية
+# خرائط أسماء الموديلات اللي يستخدمها الفرونت اند (wan, seedance-2.0, veo, nova-reel)
+# لأسماء موديلات Pollinations الفعلية المتاحة بدون "paid_only" (حسب /video/models)
 VIDEO_MODEL_MAP = {
-    "wan": "wan-fast",
+    "wan": "wan-fast",       # Wan 2.2 — الوحيد الحر من عائلة wan (5 ثواني، بدون صوت)
     "seedance-2.0": "wan-fast",
     "veo": "wan-fast",
-    "nova-reel": "nova-reel",
+    "nova-reel": "nova-reel",  # حر أيضًا، فيديو أطول (6-120 ثانية)
 }
 
 
 async def generate_image(prompt: str) -> dict:
     import random
 
+    prompt = await _translate_to_english_if_needed(prompt)
+
     # ⚠️ الصور المجانية بـ Pollinations لا تحتاج مفتاح إطلاقًا — إرسال مفتاح
     # الفيديو (sk_...) هنا كان يسبب رفض صامت وإرجاع صورة افتراضية بدل الفعلية
-    params = {"nologo": "true", "seed": random.randint(1, 2_000_000_000)}
+    # model=flux لجودة أوضح، ودقة أعلى (1024x1024) بدل الافتراضي الصغير
+    params = {
+        "nologo": "true",
+        "model": "flux",
+        "width": 1024,
+        "height": 1024,
+        "seed": random.randint(1, 2_000_000_000),
+    }
     url = f"{IMAGE_BASE}/{urllib.parse.quote(prompt)}?{urllib.parse.urlencode(params)}"
 
     async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
@@ -53,9 +88,17 @@ async def generate_image(prompt: str) -> dict:
 async def generate_video_sync(
     prompt: str, duration: int = 8, aspect_ratio: str = "16:9", model: str = "wan"
 ) -> dict:
-    """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations."""
+    """يستدعي نقطة نهاية الفيديو المخصصة الأحدث لدى Pollinations.
+
+    ⚠️ الرصيد المجاني (Pollen) اللي تحصل عليه تلقائيًا بحساب Pollinations
+    صغير جدًا (يكفي بضع مرات فقط). moديل wan-fast هو الأرخص (~0.01 Pollen
+    بالثانية = 0.05 لفيديو 5 ثواني)، فنستخدمه دائمًا كافتراضي حتى ما يخلص
+    رصيدك بسرعة. لفيديوهات أطول، لازم تشحن رصيد إضافي من
+    https://enter.pollinations.ai
+    """
+    prompt = await _translate_to_english_if_needed(prompt)
     pollinations_model = "wan-fast"
-    duration = 5
+    duration = 5  # المدة الوحيدة المدعومة لهذا الموديل
 
     params = {"model": pollinations_model, "duration": duration, "aspectRatio": aspect_ratio}
     if POLLINATIONS_API_KEY:
@@ -77,3 +120,4 @@ async def generate_video_sync(
 
     b64 = base64.b64encode(video_bytes).decode("utf-8")
     return {"video_base64": f"data:video/mp4;base64,{b64}"}
+
