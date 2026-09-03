@@ -74,7 +74,6 @@ async def generate_video(request: Request):
             job_doc["_fal_status_url"] = fal_result.get("_status_url")
             job_doc["_fal_response_url"] = fal_result.get("_response_url")
         else:
-            # المسار المجاني: Pollinations (استدعاء متزامن، يرجّع الفيديو مباشرة)
             pollinations_result = await pollinations_provider.generate_video_sync(
                 prompt, duration, aspect_ratio, model
             )
@@ -110,7 +109,7 @@ async def get_video_job(job_id: str):
             await video_jobs_col.update_one({"job_id": job_id}, {"$set": update_fields})
             job.update(update_fields)
         except Exception:
-            pass  # نرجّع آخر حالة معروفة محليًا إن تعذّر الاستعلام من المزوّد
+            pass
 
     return {
         "job_id": job["job_id"],
