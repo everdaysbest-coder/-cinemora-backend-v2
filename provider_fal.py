@@ -36,7 +36,7 @@ async def generate_image(prompt: str) -> dict:
     return {"image_url": images[0].get("url")}
 
 FAL_MODEL_MAP = {
-    "sora-2_short": "bytedance/seedance-2.0/text-to-video",
+    "sora-2_short": "fal-ai/kling-video/v3/standard/text-to-video",
     "sora-2_long": "fal-ai/longcat-video/text-to-video/720p",
 }
 
@@ -55,9 +55,9 @@ async def submit_video_job(prompt: str, duration: int, aspect_ratio: str, model:
         fal_model = FAL_MODEL_MAP["sora-2_short"]
         payload = {
             "prompt": prompt,
-            "duration": str(max(4, duration)),
-            "resolution": "720p",
-            "aspect_ratio": aspect_ratio,
+            "duration": str(max(3, duration)),
+            "aspect_ratio": aspect_ratio if aspect_ratio in ("16:9", "9:16", "1:1") else "16:9",
+            "generate_audio": False,  # نوفّر التكلفة: البوت يحرق صوته الخاص أصلاً (gTTS) لاحقًا
         }
     else:
         fal_model = FAL_MODEL_MAP["sora-2_long"]
